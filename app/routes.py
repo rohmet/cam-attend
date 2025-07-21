@@ -114,3 +114,51 @@ def tambah_mahasiswa():
     return redirect(url_for('mahasiswa'))
   
   return render_template('tambah_mahasiswa.html')
+
+# Route edit mahasiswa
+@app.route('/mahasiswa/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_mahasiswa(id):
+  mahasiswa = Mahasiswa.query.get_or_404(id)
+  if request.method == 'POST':
+    mahasiswa.nim = request.form['nim']
+    mahasiswa.nama = request.form['nama']
+    foto = request.files['foto']
+    
+    # jika ada foto baru diunggah
+    if foto:
+      # Hapus foto lama jika bukan default.jpg
+      if mahasiswa.foto != 'default.jpg':
+        path_foto_lama = os.path.join(app.root_path, 'static/uploads', mahasiswa.foto)
+        if os.path.exists(path_foto_lama):
+          os.remove(path_foto_lama)
+          
+      #simpan foto baru
+      nama_file_foto = secure_filename(foto.filename)
+      path_foto_baru = os.path.join(app.root_path, 'static/uploads', nama_file_foto)
+      foto.save(path_foto_baru)
+      mahasiswa.foto = nama_file_foto
+      
+    db.session.commit()
+    flash('Data mahasiswa berhasil diperbarui!', 'success')
+    return redirect(url_for('mahasiswa'))
+  
+  return render_template('edit_mahasiswa.html', mahasiswa=mahasiswa)
+
+# Route Hapus Mahasiswa
+@app.route('/mahasiswa/hapus/<int:id>', methods=['POST'])
+@login_required
+def hapus_mahasiswa(id):
+  mahasiswa = Mahasiswa.query.get_or_404(id)
+  
+  # Hapus file foto terkait jika bukan default.jpg
+  if mahasiswa.foto != 'default.jpg':
+    path_foto = os.path.join(app.root_path, 'static/uploads', mahasiswa.foto)
+    if os.path.exists(path_foto):
+      os.remove(path_foto)
+  
+  db.session.delete(mahasiswa)
+  db.session.commit()
+  flash('Data mahasiswa telah dihapus.', 'success')
+  return redirect(url_for('mahasiswa'))
+  
