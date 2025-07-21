@@ -1,6 +1,9 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, sessions
 from app import app, db, login_manager
 from flask_login import UserMixin, login_user, logout_user, login_required, current_user
+from app.models import Mahasiswa
+from werkzeug.utils import secure_filename
+import os
 
 # model pengguna sederhana untuk admin
 class Admin(UserMixin):
@@ -71,3 +74,43 @@ def logout():
   logout_user()
   flash('Anda telah logout.', 'info')
   return redirect(url_for('login'))
+
+# Route mahasiswa
+@app.route('/mahasiswa')
+@login_required
+def mahasiswa():
+  semua_mahasiswa = Mahasiswa.query.all()
+  return render_template('mahasiswa.html', mahasiswa=semua_mahasiswa)
+
+# Route tambah mahasiswa
+@app.route('/mahasiswa/tambah', methods=['GET', 'POST'])
+@login_required
+def tambah_mahasiswa():
+  if request.method == 'POST':
+    nim = request.form.get('nim')
+    nama = request.form.get('nama')
+    foto = request.files.get('foto')
+    
+    # cek apakah NIM sudah ada
+    if Mahasiswa.query.filter_by(nim=nim).first():
+      flash('NIM sudah ada!', 'danger')
+      return redirect(url_for('tambah_mahasiswa'))
+    
+    # Simpan foto jika ada
+    if foto:
+      nama_file_foto = secure_filename(foto.filename)
+      path_foto = os.path.join(app.root_path, 'static/uploads', nama_file_foto)
+      foto.save(path_foto)
+    else:
+      # Jika tidak ada foto, gunakan foto default
+      nama_file_foto = 'default.jpg'
+      
+    # Tambahkan mahasiswa baru dan simpan ke db
+    mahasiswa_baru = Mahasiswa(nim=nim, nama=nama, foto=nama_file_foto)
+    db.session.add(mahasiswa_baru)
+    db.session.commit()
+    
+    flash('Mahasiswa baru berhasil ditambahkan!', 'success')
+    return redirect(url_for('mahasiswa'))
+  
+  return render_template('tambah_mahasiswa.html')
