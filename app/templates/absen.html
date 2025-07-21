@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Lakukan Absensi{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4 text-gray-800">Absensi via Kamera</h1>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Kamera</h6>
+            </div>
+            <div class="card-body text-center">
+                <video id="video" width="640" height="480" autoplay playsinline></video>
+                <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+            </div>
+            <div class="card-footer text-center">
+                <button id="snap" class="btn btn-primary btn-lg">Lakukan Absen</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Status</h6>
+            </div>
+            <div class="card-body">
+                <div id="status">Arahkan wajah ke kamera dan klik tombol 'Lakukan Absen'.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const snapButton = document.getElementById('snap');
+    const statusDiv = document.getElementById('status');
+
+    // 1. Mengakses kamera pengguna
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            video.srcObject = stream;
+        })
+        .catch(err => {
+            console.error("Error: ", err);
+            statusDiv.innerHTML = `<div class="alert alert-danger">Tidak dapat mengakses kamera. Pastikan Anda memberikan izin.</div>`;
+        });
+
+    // 2. Event listener untuk tombol "Lakukan Absen"
+    snapButton.addEventListener('click', () => {
+        statusDiv.innerHTML = `<div class="alert alert-info">Memproses...</div>`;
+        snapButton.disabled = true;
+
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, 640, 480);
+
+        // 3. Mengirim gambar ke server
+        canvas.toBlob(blob => {
+            const formData = new FormData();
+            formData.append('image', blob, 'snapshot.jpg');
+
+            fetch('/scan_wajah', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 4. Menampilkan hasil dari server
+                if (data.status === 'success') {
+                    statusDiv.innerHTML = `<div class="alert alert-success">Absensi berhasil untuk: <strong>${data.nama}</strong></div>`;
+                } else if (data.status === 'already_exists') {
+                    statusDiv.innerHTML = `<div class="alert alert-warning"><strong>${data.nama}</strong> sudah melakukan absensi hari ini.</div>`;
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+                snapButton.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<div class="alert alert-danger">Terjadi kesalahan saat mengirim data.</div>`;
+                snapButton.disabled = false;
+            });
+        }, 'image/jpeg');
+    });
+</script>
+{% endblock %}

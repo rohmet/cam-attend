@@ -161,4 +161,9 @@ def hapus_mahasiswa(id):
   db.session.commit()
   flash('Data mahasiswa telah dihapus.', 'success')
   return redirect(url_for('mahasiswa'))
-  
+
+# Route absensi
+@app.route('/absen')
+@login_required
+def absen():
+  return render_template('absen.html')
