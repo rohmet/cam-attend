@@ -237,3 +237,10 @@ def scan_wajah():
   except Exception as e:
     print(f"Error: {e}")
     return jsonify({'status': 'error', 'message': 'Terjadi kesalahan pada server.'})
+  
+# Route rekap absen
+@app.route('/rekap')
+@login_required
+def rekap():
+  semua_rekap = RekapAbsensi.query.order_by(RekapAbsensi.timestamp.desc()).all()
+  return render_template('rekap_absensi.html', semua_rekap=semua_rekap)

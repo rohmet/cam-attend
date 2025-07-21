@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Rekap Data Absensi{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-2 text-gray-800">Rekapitulasi Data Absensi</h1>
+<p class="mb-4">Berikut adalah seluruh data absensi yang telah tercatat dalam sistem.</p>
+
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Riwayat Absensi</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>NIM</th>
+                        <th>Nama Mahasiswa</th>
+                        <th>Waktu Absen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rekap in semua_rekap %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ rekap.mahasiswa.nim }}</td>
+                        <td>{{ rekap.mahasiswa.nama }}</td>
+                        <td>{{ rekap.timestamp.strftime('%A, %d %B %Y - %H:%M:%S') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center">Belum ada data absensi.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
