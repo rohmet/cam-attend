@@ -9,7 +9,7 @@ from app.models import RekapAbsensi
 import face_recognition
 import numpy as np
 import cv2
-from datetime import date
+from datetime import date, datetime
 
 # model pengguna sederhana untuk admin
 class Admin(UserMixin):
@@ -220,10 +220,12 @@ def scan_wajah():
 
         # Cek apakah mahasiswa sudah absen hari ini
         today = date.today()
-        sudah_absen = RekapAbsensi.query.filter_by(mahasiswa_id=id_mahasiswa).filter(db.func.date(RekapAbsensi.timestamp) == today).first()
+        start_of_day = datetime.combine(today, datetime.min.time())
+        end_of_day = datetime.combine(today, datetime.max.time())
+        sudah_absen = RekapAbsensi.query.filter_by(mahasiswa_id=id_mahasiswa).filter(RekapAbsensi.timestamp.between(start_of_day, end_of_day)).first()
 
         if sudah_absen:
-            return jsonify({'status': 'already_exists', 'message': 'Sudah absen hari ini.', 'nama': nama_mahasiswa})
+          return jsonify({'status': 'already_exists', 'message': 'Sudah absen hari ini.', 'nama': nama_mahasiswa})
 
         # Jika belum, catat absensi baru
         absen_baru = RekapAbsensi(mahasiswa_id=id_mahasiswa)

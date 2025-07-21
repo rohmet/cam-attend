@@ -16,7 +16,10 @@
                 <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
             </div>
             <div class="card-footer text-center">
-                <button id="snap" class="btn btn-primary btn-lg">Lakukan Absen</button>
+                <button id="snap" class="btn btn-primary btn-lg">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
+                    <span class="button-text">Lakukan Absen</span>
+                </button>
             </div>
         </div>
     </div>
@@ -52,6 +55,8 @@
     snapButton.addEventListener('click', () => {
         statusDiv.innerHTML = `<div class="alert alert-info">Memproses...</div>`;
         snapButton.disabled = true;
+        snapButton.querySelector('.spinner-border').style.display = 'inline-block';
+        snapButton.querySelector('.button-text').innerText = 'Memindai...';
 
         const context = canvas.getContext('2d');
         context.drawImage(video, 0, 0, 640, 480);
@@ -81,7 +86,13 @@
                 console.error('Error:', error);
                 statusDiv.innerHTML = `<div class="alert alert-danger">Terjadi kesalahan saat mengirim data.</div>`;
                 snapButton.disabled = false;
+            })
+            .finally(() => {
+                snapButton.disabled = false;
+                snapButton.querySelector('.spinner-border').style.display = 'none';
+                snapButton.querySelector('.button-text').innerText = 'Lakukan Absen';
             });
+            
         }, 'image/jpeg');
     });
 </script>
