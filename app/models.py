@@ -17,7 +17,7 @@ class Mahasiswa(db.Model):
 # model rekap absensi
 class RekapAbsensi(db.Model):
   id = db.Column(db.Integer, primary_key=True)
-  timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+  timestamp = db.Column(db.DateTime, nullable=False)
   
   # relasi ke tabel mahasiswa
   mahasiswa_id = db.Column(db.Integer, db.ForeignKey('mahasiswa.id'), nullable=False)

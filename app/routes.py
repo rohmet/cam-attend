@@ -228,7 +228,7 @@ def scan_wajah():
           return jsonify({'status': 'already_exists', 'message': 'Sudah absen hari ini.', 'nama': nama_mahasiswa})
 
         # Jika belum, catat absensi baru
-        absen_baru = RekapAbsensi(mahasiswa_id=id_mahasiswa)
+        absen_baru = RekapAbsensi(mahasiswa_id=id_mahasiswa, timestamp=datetime.now())
         db.session.add(absen_baru)
         db.session.commit()
         
