@@ -6,7 +6,7 @@
 <h1 class="h3 mb-2 text-gray-800">Manajemen Data Mahasiswa</h1>
 <p class="mb-4">Di sini Anda bisa menambah, mengedit, dan menghapus data mahasiswa.</p>
 
-<a href="{{ url_for('tambah_mahasiswa') }}" class="btn btn-primary btn-icon-split mb-3">
+<a href="{{ url_for('mahasiswa.tambah_mahasiswa') }}" class="btn btn-primary btn-icon-split mb-3">
     <span class="icon text-white-50">
         <i class="fas fa-plus"></i>
     </span>
@@ -45,9 +45,9 @@
                             <img src="{{ url_for('static', filename='uploads/' + mhs.foto) }}" width="100">
                         </td>
                         <td>
-                            <a href="{{ url_for('edit_mahasiswa', id=mhs.id) }}" class="btn btn-warning btn-sm">Edit</a>
+                            <a href="{{ url_for('mahasiswa.edit_mahasiswa', id=mhs.id) }}" class="btn btn-warning btn-sm">Edit</a>
                             
-                            <form action="{{ url_for('hapus_mahasiswa', id=mhs.id) }}" method="POST" class="d-inline">
+                            <form action="{{ url_for('mahasiswa.hapus_mahasiswa', id=mhs.id) }}" method="POST" class="d-inline">
                                 <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Apakah Anda yakin ingin menghapus data ini?')">Hapus</button>
                             </form>
                         </td>

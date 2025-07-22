@@ -22,22 +22,22 @@
             </a>
             <hr class="sidebar-divider my-0">
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('dashboard') }}">
+                <a class="nav-link" href="{{ url_for('main.dashboard') }}">
                     <i class="fas fa-fw fa-tachometer-alt"></i>
                     <span>Dashboard</span></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('mahasiswa') }}">
+                <a class="nav-link" href="{{ url_for('mahasiswa.list_mahasiswa') }}">
                     <i class="fas fa-fw fa-users"></i>
                     <span>Data Mahasiswa</span></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('absen') }}">
+                <a class="nav-link" href="{{ url_for('absensi.absen') }}">
                     <i class="fas fa-fw fa-table"></i>
                     <span>Lakukan Absensi</span></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('rekap') }}">
+                <a class="nav-link" href="{{ url_for('absensi.rekap') }}">
                     <i class="fas fa-fw fa-table"></i>
                     <span>Rekap Absensi</span>
                 </a>

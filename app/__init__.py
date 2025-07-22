@@ -15,10 +15,21 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# Inisialisasi LoginManager
+# Inisialisasi LoginManager setup
 login_manager = LoginManager(app)
-login_manager.login_view = 'login' # Arahkan ke route 'login' jika pengguna belum login
+login_manager.login_view = 'auth.login' # Arahkan ke route 'login' jika pengguna belum login
 login_manager.login_message_category = 'info' # Kategori pesan flash
 
-# Import routes and models
-from app import routes, models
+# Import models
+from app import models
+
+# BluePrint dari controllers
+from app.controllers.main_controller import main_bp
+from app.controllers.auth_controller import auth_bp
+from app.controllers.mahasiswa_controller import mahasiswa_bp
+from app.controllers.absensi_controller import absensi_bp
+
+app.register_blueprint(main_bp)
+app.register_blueprint(auth_bp)
+app.register_blueprint(mahasiswa_bp, url_prefix='/mahasiswa')
+app.register_blueprint(absensi_bp)
