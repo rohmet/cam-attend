@@ -79,7 +79,69 @@ def scan_wajah():
   except Exception as e:
     print(f"Error: {e}")
     return jsonify({'status': 'error', 'message': 'Terjadi kesalahan pada server.'})
+
+# RUTE BARU: Menyediakan data wajah untuk client-side JS
+@absensi_bp.route('/get_known_faces')
+@login_required
+def get_known_faces():
+  try:
+    semua_mahasiswa = Mahasiswa.query.all()
+    known_faces = []
+    
+    for mhs in semua_mahasiswa:
+      if mhs.foto and mhs.foto != 'default.jpg':
+        path_foto = os.path.join(app.root_path, 'static/uploads', mhs.foto)
+        if os.path.exists(path_foto):
+          image = face_recognition.load_image_file(path_foto)
+          encodings = face_recognition.face_encodings(image)
+          if encodings:
+            encoding_list = encodings[0].tolist()
+            known_faces.append({
+              "id": mhs.id,
+              "nama": mhs.nama,
+              "encoding": encoding_list
+            })
+    return jsonify(known_faces)
   
+  except Exception as e:
+    print(f"Error saat memuat data wajah: {e}")
+    return jsonify({'status': 'error', 'message': 'Gagal memuat data wajah dari server.'}), 500
+
+# RUTE BARU: Menerima hasil scan dari client dan mencatat absensi
+@absensi_bp.route('/mark_attendance', methods=['POST'])
+@login_required
+def mark_attendance():
+  data = request.get_json()
+  if not data or 'id' not in data:
+    return jsonify({'status': 'error', 'message': 'Request tidak valid.'}), 400
+  
+  id_mahasiswa = data['id']
+  mahasiswa = Mahasiswa.query.get(id_mahasiswa)
+  
+  if not mahasiswa:
+        return jsonify({'status': 'error', 'message': 'Mahasiswa tidak ditemukan.'}), 404
+
+  # Cek apakah mahasiswa sudah absen hari ini
+  today = date.today()
+  start_of_day = datetime.combine(today, datetime.min.time())
+  end_of_day = datetime.combine(today, datetime.max.time())
+  sudah_absen = RekapAbsensi.query.filter_by(mahasiswa_id=id_mahasiswa).filter(RekapAbsensi.timestamp.between(start_of_day, end_of_day)).first()
+
+  if sudah_absen:
+    return jsonify({'status': 'already_exists', 'message': f'{mahasiswa.nama} sudah tercatat absen hari ini.'})
+
+  # Jika belum, catat absensi baru
+  try:
+    absen_baru = RekapAbsensi(mahasiswa_id=id_mahasiswa, timestamp=datetime.now())
+    db.session.add(absen_baru)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': f'Absensi untuk {mahasiswa.nama} berhasil dicatat.'})
+  except Exception as e:
+    db.session.rollback()
+    print(f"Error saat menyimpan absensi: {e}")
+    return jsonify({'status': 'error', 'message': 'Terjadi kesalahan pada server saat menyimpan data.'}), 500
+
+
 # Route rekap absen
 @absensi_bp.route('/rekap')
 @login_required

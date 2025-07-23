@@ -1,99 +1,190 @@
 {% extends "base.html" %}
 
-{% block title %}Lakukan Absensi{% endblock %}
+{% block title %}Absensi Real-Time{% endblock %}
 
 {% block content %}
-<h1 class="h3 mb-4 text-gray-800">Absensi via Kamera</h1>
+<h1 class="h3 mb-4 text-gray-800">Absensi Real-Time via Kamera</h1>
 
 <div class="row">
     <div class="col-lg-8">
         <div class="card shadow mb-4">
             <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Kamera</h6>
+                <h6 class="m-0 font-weight-bold text-primary">Kamera (Arahkan ke Wajah Mahasiswa)</h6>
             </div>
-            <div class="card-body text-center">
-                <video id="video" width="640" height="480" autoplay playsinline></video>
-                <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+            <div class="card-body text-center" style="position: relative; padding: 0;">
+                <div id="video-container" style="position: relative; display: inline-block;">
+                    <video id="video" width="640" height="480" autoplay muted playsinline></video>
+                    </div>
             </div>
             <div class="card-footer text-center">
-                <button id="snap" class="btn btn-primary btn-lg">
-                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
-                    <span class="button-text">Lakukan Absen</span>
-                </button>
+                <div id="initial-status" class="text-info font-weight-bold">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Memuat model pengenalan wajah, mohon tunggu...
+                </div>
             </div>
         </div>
     </div>
+
     <div class="col-lg-4">
         <div class="card shadow mb-4">
             <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Status</h6>
+                <h6 class="m-0 font-weight-bold text-primary">Status Absensi Sesi Ini</h6>
             </div>
-            <div class="card-body">
-                <div id="status">Arahkan wajah ke kamera dan klik tombol 'Lakukan Absen'.</div>
+            <div class="card-body" style="height: 540px; display: flex; flex-direction: column;">
+                <ul id="log-list" class="list-group" style="overflow-y: auto; flex-grow: 1;">
+                    </ul>
             </div>
         </div>
     </div>
 </div>
 
+<script defer src="{{ url_for('static', filename='js/face-api.min.js') }}"></script>
+
 <script>
     const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const snapButton = document.getElementById('snap');
-    const statusDiv = document.getElementById('status');
+    const logList = document.getElementById('log-list');
+    const initialStatus = document.getElementById('initial-status');
+    const videoContainer = document.getElementById('video-container');
+    const MODEL_URL = "{{ url_for('static', filename='models') }}";
 
-    // 1. Mengakses kamera pengguna
-    navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-            video.srcObject = stream;
-        })
-        .catch(err => {
-            console.error("Error: ", err);
-            statusDiv.innerHTML = `<div class="alert alert-danger">Tidak dapat mengakses kamera. Pastikan Anda memberikan izin.</div>`;
-        });
+    let faceMatcher;
+    let studentsData = [];
+    // Set untuk melacak ID yang sudah berhasil diabsen agar tidak mengirim request berulang
+    const attendedInSession = new Set(); 
 
-    // 2. Event listener untuk tombol "Lakukan Absen"
-    snapButton.addEventListener('click', () => {
-        statusDiv.innerHTML = `<div class="alert alert-info">Memproses...</div>`;
-        snapButton.disabled = true;
-        snapButton.querySelector('.spinner-border').style.display = 'inline-block';
-        snapButton.querySelector('.button-text').innerText = 'Memindai...';
+    // 2. Fungsi Utama untuk Inisialisasi
+    async function setupFaceRecognition() {
+        // Muat semua model yang diperlukan
+        await Promise.all([
+            faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
 
-        const context = canvas.getContext('2d');
-        context.drawImage(video, 0, 0, 640, 480);
-
-        // 3. Mengirim gambar ke server
-        canvas.toBlob(blob => {
-            const formData = new FormData();
-            formData.append('image', blob, 'snapshot.jpg');
-
-            fetch('/scan_wajah', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                // 4. Menampilkan hasil dari server
-                if (data.status === 'success') {
-                    statusDiv.innerHTML = `<div class="alert alert-success">Absensi berhasil untuk: <strong>${data.nama}</strong></div>`;
-                } else if (data.status === 'already_exists') {
-                    statusDiv.innerHTML = `<div class="alert alert-warning"><strong>${data.nama}</strong> sudah melakukan absensi hari ini.</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
-                }
-                snapButton.disabled = false;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                statusDiv.innerHTML = `<div class="alert alert-danger">Terjadi kesalahan saat mengirim data.</div>`;
-                snapButton.disabled = false;
-            })
-            .finally(() => {
-                snapButton.disabled = false;
-                snapButton.querySelector('.spinner-border').style.display = 'none';
-                snapButton.querySelector('.button-text').innerText = 'Lakukan Absen';
-            });
+        // Ambil data wajah (encoding) dari server
+        try {
+            const response = await fetch("{{ url_for('absensi.get_known_faces') }}");
+            studentsData = await response.json();
             
-        }, 'image/jpeg');
+            if (studentsData.length === 0) throw new Error('Tidak ada data wajah di database.');
+
+            const labeledFaceDescriptors = studentsData.map(student => {
+                const descriptors = [new Float32Array(student.encoding)];
+                return new faceapi.LabeledFaceDescriptors(student.nama, descriptors);
+            });
+
+            // Siapkan pencocok wajah dengan ambang batas (tolerance) 0.5
+            faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.5);
+            
+            // Sembunyikan status loading dan jalankan video
+            initialStatus.style.display = 'none';
+            startVideo();
+
+        } catch (error) {
+            initialStatus.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
+            console.error(error);
+        }
+    }
+
+    // 3. Fungsi untuk memulai stream video dari webcam
+    function startVideo() {
+        navigator.mediaDevices.getUserMedia({ video: {} })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => {
+                initialStatus.innerHTML = `<span class="text-danger">Error: Tidak bisa mengakses kamera.</span>`;
+                console.error("Webcam error:", err);
+            });
+    }
+
+    // 4. Event listener yang berjalan saat video mulai diputar
+    video.addEventListener('play', () => {
+        // Buat canvas untuk menggambar hasil deteksi
+        const canvas = faceapi.createCanvasFromMedia(video);
+        videoContainer.append(canvas); // Tambahkan canvas ke dalam container
+        // Atur posisi canvas agar menumpuk persis di atas video
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+
+        const displaySize = { width: video.width, height: video.height };
+        faceapi.matchDimensions(canvas, displaySize);
+
+        // Jalankan deteksi wajah secara periodik
+        setInterval(async () => {
+            if (!faceMatcher) return;
+
+            const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            
+            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+            for (const detection of resizedDetections) {
+                const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
+                const box = detection.detection.box;
+                let drawBox;
+
+                if (bestMatch.label !== 'unknown') {
+                    // Wajah dikenali -> Kotak hijau
+                    drawBox = new faceapi.draw.DrawBox(box, { 
+                        label: bestMatch.toString(),
+                        boxColor: '#28a745', // Hijau
+                        drawLabelOptions: {
+                            backgroundColor: '#28a745',
+                            fontColor: 'white',
+                        }
+                    });
+
+                    const student = studentsData.find(s => s.nama === bestMatch.label);
+                    // Jika mahasiswa ini belum diabsen di sesi ini, proses absensinya
+                    if (student && !attendedInSession.has(student.id)) {
+                        markAttendanceOnServer(student);
+                    }
+                } else {
+                    // Wajah tidak dikenali -> Kotak merah
+                    drawBox = new faceapi.draw.DrawBox(box, { label: 'Tidak Dikenali', boxColor: '#dc3545' });
+                }
+                drawBox.draw(canvas);
+            }
+        }, 250); // Deteksi setiap 250 milidetik
     });
+
+    // 5. Fungsi untuk mengirim hasil absensi ke server
+    async function markAttendanceOnServer(student) {
+        // Tandai ID ini agar tidak diproses berulang kali
+        attendedInSession.add(student.id);
+
+        try {
+            const response = await fetch("{{ url_for('absensi.mark_attendance') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: student.id })
+            });
+            const result = await response.json();
+            
+            // Tambahkan log visual di kolom status
+            const logItem = document.createElement('li');
+            logItem.className = 'list-group-item';
+            
+            if (result.status === 'success') {
+                logItem.classList.add('list-group-item-success');
+                logItem.innerHTML = `<strong>${student.nama}</strong> berhasil diabsen.`;
+            } else if (result.status === 'already_exists') {
+                logItem.classList.add('list-group-item-warning');
+                logItem.innerHTML = `<strong>${student.nama}</strong> sudah absen hari ini.`;
+            } else {
+                logItem.classList.add('list-group-item-danger');
+                logItem.textContent = `Error untuk ${student.nama}: ${result.message}`;
+            }
+            logList.prepend(logItem); // Tampilkan log baru di paling atas
+        } catch (error) {
+            console.error('Gagal mengirim data absensi:', error);
+            // Jika pengiriman gagal, hapus ID dari set agar bisa dicoba lagi nanti
+            attendedInSession.delete(student.id);
+        }
+    }
+
+    // Mulai semuanya
+    setupFaceRecognition();
+
 </script>
 {% endblock %}
