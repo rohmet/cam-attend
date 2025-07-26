@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Lakukan Absensi{% endblock %}
+{% block title %}Absensi Real-time{% endblock %}
 
 {% block content %}
-<h1 class="h3 mb-4 text-gray-800">Absensi via Kamera</h1>
+<h1 class="h3 mb-4 text-gray-800">Absensi Real-time via Kamera</h1>
 
 <div class="row">
     <div class="col-lg-8">
@@ -11,25 +11,21 @@
             <div class="card-header py-3">
                 <h6 class="m-0 font-weight-bold text-primary">Kamera</h6>
             </div>
-            <div class="card-body text-center">
-                <video id="video" width="640" height="480" autoplay playsinline></video>
-                <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
-            </div>
-            <div class="card-footer text-center">
-                <button id="snap" class="btn btn-primary btn-lg">
-                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
-                    <span class="button-text">Lakukan Absen</span>
-                </button>
+            <div class="card-body text-center p-0">
+                <video id="video" width="100%" height="auto" autoplay playsinline muted></video>
+                <canvas id="canvas" style="display: none;"></canvas>
             </div>
         </div>
     </div>
     <div class="col-lg-4">
         <div class="card shadow mb-4">
             <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Status</h6>
+                <h6 class="m-0 font-weight-bold text-primary">Status Absensi</h6>
             </div>
             <div class="card-body">
-                <div id="status">Arahkan wajah ke kamera dan klik tombol 'Lakukan Absen'.</div>
+                <div id="status">
+                    <div class="alert alert-info">Arahkan wajah ke kamera. Pemindaian akan dimulai secara otomatis...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -38,8 +34,8 @@
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const snapButton = document.getElementById('snap');
     const statusDiv = document.getElementById('status');
+    let isScanning = false; // Flag untuk mencegah request bertumpuk
 
     // 1. Mengakses kamera pengguna
     navigator.mediaDevices.getUserMedia({ video: true })
@@ -47,22 +43,50 @@
             video.srcObject = stream;
         })
         .catch(err => {
-            console.error("Error: ", err);
+            console.error("Error mengakses kamera: ", err);
             statusDiv.innerHTML = `<div class="alert alert-danger">Tidak dapat mengakses kamera. Pastikan Anda memberikan izin.</div>`;
         });
 
-    // 2. Event listener untuk tombol "Lakukan Absen"
-    snapButton.addEventListener('click', () => {
-        statusDiv.innerHTML = `<div class="alert alert-info">Memproses...</div>`;
-        snapButton.disabled = true;
-        snapButton.querySelector('.spinner-border').style.display = 'inline-block';
-        snapButton.querySelector('.button-text').innerText = 'Memindai...';
+    function drawVideo() {
+        videoContext.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+        if (recognizedName) {
+            const text = recognizedName;
+            const font = "20px sans-serif";
+            videoContext.font = font;
+            const textWidth = videoContext.measureText(text).width;
+            const x = (videoCanvas.width - textWidth) / 2;
+            const y = videoCanvas.height - 30;
+            videoContext.fillStyle = "rgba(0, 0, 0, 0.6)";
+            videoContext.fillRect(x - 5, y - 25, textWidth + 10, 30);
+            videoContext.fillStyle = "white";
+            videoContext.fillText(text, x, y);
+            recognizedName = null; // Reset setelahแสดง
+        }
+        requestAnimationFrame(drawVideo);
+    }
+
+    // 2. Fungsi untuk mengambil gambar dan mengirim ke server
+    function scanAndSend() {
+        // Jika proses scan sebelumnya belum selesai, jangan lakukan scan baru
+        if (isScanning) {
+            return;
+        }
+        isScanning = true;
+
+        // Atur ukuran canvas sesuai dengan ukuran video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
         const context = canvas.getContext('2d');
-        context.drawImage(video, 0, 0, 640, 480);
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // 3. Mengirim gambar ke server
+        // 3. Mengirim gambar (blob) ke server
         canvas.toBlob(blob => {
+            if (!blob) {
+                isScanning = false;
+                return;
+            }
+
             const formData = new FormData();
             formData.append('image', blob, 'snapshot.jpg');
 
@@ -72,28 +96,42 @@
             })
             .then(response => response.json())
             .then(data => {
-                // 4. Menampilkan hasil dari server
+                // 4. Menampilkan hasil dari server di kotak status
                 if (data.status === 'success') {
-                    statusDiv.innerHTML = `<div class="alert alert-success">Absensi berhasil untuk: <strong>${data.nama}</strong></div>`;
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success text-center">
+                            <h5 class="alert-heading">Absensi Berhasil!</h5>
+                            <p class="mb-0">Selamat datang, <strong>${data.nama}</strong>.</p>
+                        </div>`;
                 } else if (data.status === 'already_exists') {
-                    statusDiv.innerHTML = `<div class="alert alert-warning"><strong>${data.nama}</strong> sudah melakukan absensi hari ini.</div>`;
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-warning text-center">
+                            <h5 class="alert-heading">Sudah Absen</h5>
+                            <p class="mb-0"><strong>${data.nama}</strong>, Anda sudah tercatat absen hari ini.</p>
+                        </div>`;
+                } else if (data.status === 'error' && data.message === 'Wajah tidak dikenali.') {
+                    // Jangan tampilkan error jika hanya tidak kenal, biarkan status "memindai"
+                    console.log('Wajah tidak dikenali, mencoba lagi...');
+                    statusDiv.innerHTML = `<div class="alert alert-info">Memindai wajah...</div>`;
                 } else {
+                    // Tampilkan error lain dari server
                     statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
                 }
-                snapButton.disabled = false;
             })
             .catch(error => {
                 console.error('Error:', error);
-                statusDiv.innerHTML = `<div class="alert alert-danger">Terjadi kesalahan saat mengirim data.</div>`;
-                snapButton.disabled = false;
+                statusDiv.innerHTML = `<div class="alert alert-danger">Terjadi kesalahan saat menghubungi server.</div>`;
             })
             .finally(() => {
-                snapButton.disabled = false;
-                snapButton.querySelector('.spinner-border').style.display = 'none';
-                snapButton.querySelector('.button-text').innerText = 'Lakukan Absen';
+                // Set flag kembali ke false agar scan berikutnya bisa berjalan
+                isScanning = false;
             });
             
         }, 'image/jpeg');
-    });
+    }
+
+    // 5. Jalankan fungsi scanAndSend setiap 3 detik
+    setInterval(scanAndSend, 3000); // Interval 3000 ms = 3 detik
+
 </script>
 {% endblock %}
